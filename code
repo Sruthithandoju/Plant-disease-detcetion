@@ -1,0 +1,256 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "mini project.ipynb",
+      "private_outputs": true,
+      "provenance": [],
+      "collapsed_sections": [],
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    },
+    "language_info": {
+      "name": "python"
+    },
+    "accelerator": "GPU"
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/Sruthithandoju/Plant-disease-detcetion/blob/main/code\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "_Wnytwd8DSkm"
+      },
+      "source": [
+        "from google.colab import files\n",
+        "files.upload()"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "DwPsyvPFDVCm"
+      },
+      "source": [
+        "!mkdir -p ~/.kaggle\n",
+        "!cp kaggle.json ~/.kaggle/\n",
+        "!chmod 600 ~/.kaggle/kaggle.json"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "ahSO6gfsDU_-"
+      },
+      "source": [
+        "!kaggle datasets download -d abdallahalidev/plantvillage-dataset"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "3Z8b-0OiDXU8"
+      },
+      "source": [
+        "!unzip plantvillage-dataset.zip"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "QiLVAz5_Ab43"
+      },
+      "source": [
+        "!pip install git+https://github.com/zer0sh0t/zer0t0rch"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "mduUvsEUjWC1"
+      },
+      "source": [
+        "import torch\n",
+        "from torch import nn\n",
+        "import matplotlib.pyplot as plt\n",
+        "from zer0t0rch import Zer0t0rchWrapper\n",
+        "from torchvision import models, transforms\n",
+        "from torchvision.datasets import ImageFolder\n",
+        "from zer0t0rch.utils import clear_cache, get_accuracy\n",
+        "from PIL import Image\n",
+        "\n",
+        "clear_cache()"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "xElcaFvI6RLY"
+      },
+      "source": [
+        "T = transforms.Compose(\n",
+        "    [\n",
+        "     transforms.Resize((224, 224)),\n",
+        "     transforms.ToTensor()\n",
+        "    ]\n",
+        ")\n",
+        "\n",
+        "data = ImageFolder('plantvillage dataset/color', transform=T)\n",
+        "class_list = data.classes\n",
+        "print(len(data), len(class_list), class_list[:10])"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "WcCxvp_RAvHo"
+      },
+      "source": [
+        "img, label = data[54304]\n",
+        "print(class_list[label])\n",
+        "plt.imshow(img.permute(1, 2, 0))"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "v1Xogc89AlQH"
+      },
+      "source": [
+        "model = models.resnet18(pretrained=True)\n",
+        "for p in model.parameters():\n",
+        "    p.requires_grad = False\n",
+        "model.fc = nn.Linear(model.fc.in_features, 38)\n",
+        "\n",
+        "loss_fn = nn.CrossEntropyLoss()\n",
+        "metric_fns = {'acc': get_accuracy}"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "H68ObWFV6PJd"
+      },
+      "source": [
+        "our_model = Zer0t0rchWrapper(model)\n",
+        "our_model.prepare_data(data, batch_size=64, val_pct=0.2)\n",
+        "our_model.compile(loss_fn, metric_fns)"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "VwdkaQiA6PG5"
+      },
+      "source": [
+        "our_model.fit(num_epochs=2, plot_graphs=True)"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "GAYfIVMd_x6K"
+      },
+      "source": [
+        "def predict(img_path):\n",
+        "    img = Image.open(img_path).convert(\"RGB\")\n",
+        "    img = T(img).to(our_model.device)\n",
+        "    preds = our_model.predict(img.unsqueeze(0))  \n",
+        "    prob, label = preds.softmax(-1).max(-1)\n",
+        "    print(f'probability: {prob.item()} \\n{class_list[label.item()]}')"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "OZwEYqZyOFtX"
+      },
+      "source": [
+        "predict('plantvillage dataset/color/Apple___healthy/0055dd26-23a7-4415-ac61-e0b44ebfaf80___RS_HL 5672.JPG')"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "Es-hHMc-OROK"
+      },
+      "source": [
+        "predict('/content/plantvillage dataset/color/Apple___Black_rot/0090d05d-d797-4c99-abd4-3b9cb323a5fd___JR_FrgE.S 8727.JPG')"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "6Ay9k0l0sF-L"
+      },
+      "source": [
+        "predict('/content/apple3.jpg')"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "-N5DTNkWf-f3"
+      },
+      "source": [
+        "predict('/content/plantvillage dataset/color/Tomato___Tomato_mosaic_virus/000ec6ea-9063-4c33-8abe-d58ca8a88878___PSU_CG 2169.JPG')"
+      ],
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "id": "G6uzxs39uasa"
+      },
+      "source": [
+        ""
+      ],
+      "execution_count": null,
+      "outputs": []
+    }
+  ]
+}
